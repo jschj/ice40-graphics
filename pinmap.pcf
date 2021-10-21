@@ -1,0 +1,18 @@
+set_io  hsync   34
+set_io  vsync   31
+set_io  clk  35
+
+set_io   r0       45
+set_io   r1      43
+set_io   r2      38
+set_io   r3      36
+
+set_io   g0      32
+set_io   g1     28
+set_io   g2     26
+set_io   g3     23
+
+set_io   b0       46
+set_io   b1      44
+set_io   b2      42
+set_io   b3      37
