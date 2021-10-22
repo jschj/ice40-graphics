@@ -1,5 +1,6 @@
 `include "vga_signal_gen.sv"
-`include "spram_framebuffer.sv"
+//`include "spram_framebuffer.sv"
+`include "spram_fb.sv"
 
 
 module vga_controller(
@@ -29,34 +30,28 @@ module vga_controller(
     logic o_hsync;
     logic o_vsync;
     logic de;
-    logic frame;
+    logic new_frame;
 
     vga_signal_gen gen(
         pixel_clk, rst,
-        sx, sy, de, frame,
+        sx, sy, de, new_frame,
         o_hsync, o_vsync);
 
     logic [3:0] red;
     logic [3:0] green;
     logic [3:0] blue;
 
-    logic [15:0] addr;
-    logic fill_image;
     logic [11:0] fb_out;
 
-    initial begin
-        fill_image <= 1;
-        addr <= 0;
-    end
-
     logic [7:0] wx;
-    logic [7:0] wy;
+    logic [6:0] wy;
 
     initial begin
         wx <= 0;
         wy <= 0;
     end
 
+    /*
     framebuffer fb(
         .clk(pixel_clk),
         .rst(1'b0),
@@ -66,27 +61,34 @@ module vga_controller(
         .ry(sy[7:0]),
         .rc(fb_out)
 
+    ); */
+
+    logic [11:0] color;
+
+    spram_fb_double_buffered fb(
+        .clk(pixel_clk), .rst(1'b0), .switch_buffers(new_frame),
+        .we(1'b1), .wx(wx), .wy(wy), .wc(color),
+        .rx(sx[7:0]), .ry(sy[7:0]), .rc(fb_out)
     );
 
     /* the area outside the framebuffer is black */
-    assign red   = (sx[10:8] | sy[10:8]) ? 0 : fb_out[3:0];
-    assign green = (sx[10:8] | sy[10:8]) ? 0 : fb_out[7:4];
-    assign blue  = (sx[10:8] | sy[10:8]) ? 0 : fb_out[11:8];
+    assign red   = (sx[10:8] | sy[10:7]) ? 0 : fb_out[3:0];
+    assign green = (sx[10:8] | sy[10:7]) ? 0 : fb_out[7:4];
+    assign blue  = (sx[10:8] | sy[10:7]) ? 0 : fb_out[11:8];
 
     always_ff @(posedge pixel_clk) begin
-        if (fill_image) begin
-            if (wx == 255)
-                wx <= 0;
-            else
-                wx <= wx + 1;
+        if (wx == 255)
+            wx <= 0;
+        else
+            wx <= wx + 1;
 
-            if (wx == 255)
-                wy <= wy + 1;
-
-            if (wx == 255 && wy == 255)
-                fill_image <= 0;
-        end
+        if (wx == 255)
+            wy <= wy + 1;
     end
+
+    always_ff @(posedge pixel_clk)
+        if (new_frame)
+            color <= color + 1;
 
     always_ff @(posedge pixel_clk) begin
         hsync <= o_hsync;
@@ -94,11 +96,11 @@ module vga_controller(
 
         if (de) begin
             r <= red;
-            //g[3:1] <= green[3:1];
-            //g[0] <= pixel_clk;
+            g[3:1] <= green[3:1];
+            g[0] <= pixel_clk;
             //g[0] <= 0;
             //g <= {pixel_clk, pixel_clk, pixel_clk, pixel_clk};
-            g <= green;
+            //g <= green;
             b <= blue;
         end else begin
             r <= 0;
