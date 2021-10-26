@@ -1,12 +1,16 @@
 `include "vga_signal_gen.sv"
 //`include "spram_framebuffer.sv"
 `include "spram_fb.sv"
+`include "ball.sv"
+`include "square.sv"
+`include "clock_div.sv"
 
 
 module vga_controller(
     input logic clk, input logic rst,
     output logic hsync, output logic vsync,
-    output logic [3:0] r, output logic [3:0] g, output logic [3:0] b
+    output logic [3:0] r, output logic [3:0] g, output logic [3:0] b,
+    output logic LED_R, output logic LED_G, output logic LED_B
 );
     logic pixel_clk;
     logic real_clk;
@@ -37,6 +41,21 @@ module vga_controller(
         sx, sy, de, new_frame,
         o_hsync, o_vsync);
 
+    logic frame_clk;
+
+    clock_div #(
+        75
+    ) c_div (
+        new_frame,
+        frame_clk
+    );
+
+    always @(posedge frame_clk)
+        LED_R <= !LED_R;
+
+    assign LED_G = 1'b1;
+    assign LED_B = 1'b1;
+
     logic [3:0] red;
     logic [3:0] green;
     logic [3:0] blue;
@@ -45,11 +64,6 @@ module vga_controller(
 
     logic [7:0] wx;
     logic [6:0] wy;
-
-    initial begin
-        wx <= 0;
-        wy <= 0;
-    end
 
     /*
     framebuffer fb(
@@ -66,16 +80,12 @@ module vga_controller(
     logic [11:0] color;
 
     spram_fb_double_buffered fb(
-        .clk(pixel_clk), .rst(1'b0), .switch_buffers(new_frame),
+        .clk(pixel_clk), .rst(1'b0), .switch_buffers(frame_clk),
         .we(1'b1), .wx(wx), .wy(wy), .wc(color),
         .rx(sx[7:0]), .ry(sy[7:0]), .rc(fb_out)
     );
 
-    /* the area outside the framebuffer is black */
-    assign red   = (sx[10:8] | sy[10:7]) ? 0 : fb_out[3:0];
-    assign green = (sx[10:8] | sy[10:7]) ? 0 : fb_out[7:4];
-    assign blue  = (sx[10:8] | sy[10:7]) ? 0 : fb_out[11:8];
-
+    /*
     always_ff @(posedge pixel_clk) begin
         if (wx == 255)
             wx <= 0;
@@ -89,6 +99,17 @@ module vga_controller(
     always_ff @(posedge pixel_clk)
         if (new_frame)
             color <= color + 1;
+     */
+
+    square sq(
+        .clk(pixel_clk), .rst(new_frame),
+        .sx(wx), .sy(wy), .color(color)
+    );
+
+    /* the area outside the framebuffer is black */
+    assign red   = (sx[10:8] | sy[10:7]) ? 0 : fb_out[3:0];
+    assign green = (sx[10:8] | sy[10:7]) ? 0 : fb_out[7:4];
+    assign blue  = (sx[10:8] | sy[10:7]) ? 0 : fb_out[11:8];
 
     always_ff @(posedge pixel_clk) begin
         hsync <= o_hsync;
@@ -96,11 +117,11 @@ module vga_controller(
 
         if (de) begin
             r <= red;
-            g[3:1] <= green[3:1];
-            g[0] <= pixel_clk;
+            //g[3:1] <= green[3:1];
+            //g[0] <= pixel_clk;
             //g[0] <= 0;
             //g <= {pixel_clk, pixel_clk, pixel_clk, pixel_clk};
-            //g <= green;
+            g <= green;
             b <= blue;
         end else begin
             r <= 0;
